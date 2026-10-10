@@ -34,6 +34,9 @@ using UnityEngine;
 //  2. Copies the avatar's FX controller to Assets/Siusiu_FaceEmo, sets the "Facial" layer weight to 0
 //     and inserts a layer that resets the lip sync blend shapes before the "Talk Control" layer.
 //     The original controller is not modified.
+//  3. Makes the "Talk" layer stop while FaceEmo's mouth morph canceller is disabled for the current expression,
+//     so that lip sync can be turned off per expression (uncheck the mouth morph canceller or disable lip sync
+//     for that expression in FaceEmo).
 //
 // Tools > Siusiu > Strip LipSync Curves From Selected Clips
 //  Removes zero-valued lip sync blend shape curves from the selected expression clips (modifies them in place).
@@ -53,7 +56,11 @@ namespace SiusiuFaceEmoLipSync
         private const string OutputDir = "Assets/" + OutputFolderName;
         private const string FacialLayerName = "Facial";
         private const string TalkControlLayerName = "Talk Control";
+        private const string TalkLayerName = "Talk";
         private const string ResetLayerName = "Talk Reset";
+        // Driven by FaceEmo for each expression (true while the mouth morph canceller is enabled)
+        private const string CancelParamName = "CN_MOUTH_MORPH_CANCEL_ENABLE";
+        private const string FaceEmoParamPrefix = "FaceEmo_";
         private const int FxLayerType = 5; // VRCAvatarDescriptor.AnimLayerType.FX
 
         // Blend shapes actually moved by SiuSiu_Talk_*.anim
@@ -107,7 +114,8 @@ namespace SiusiuFaceEmoLipSync
                 "This will, for each SiuSiu avatar targeted by FaceEmo in the open scenes:\n" +
                 "- add blend shapes to FaceEmo's excluded / mouth morph lists\n" +
                 $"- copy the FX controller to {OutputDir} and assign the copy to the avatar\n" +
-                $"- set the \"{FacialLayerName}\" layer weight to 0 and add a \"{ResetLayerName}\" layer in the copy\n\n" +
+                $"- set the \"{FacialLayerName}\" layer weight to 0 and add a \"{ResetLayerName}\" layer in the copy\n" +
+                $"- make the \"{TalkLayerName}\" layer stop for expressions whose mouth morph canceller is disabled\n\n" +
                 "Continue?", "OK", "Cancel"))
             {
                 return;
@@ -283,9 +291,60 @@ namespace SiusiuFaceEmoLipSync
             }
 
             fx.layers = fxLayers.ToArray();
+            notes.AddRange(SetupTalkGate(fx));
             EditorUtility.SetDirty(fx);
 
             return notes.Count > 0 ? string.Join(", ", notes) : "already set up";
+        }
+
+        // Makes every state of the "Talk" layer exit while FaceEmo's mouth morph canceller is disabled.
+        // FaceEmo's parameter is prefixed or not depending on its "add parameter prefix" setting, and FaceEmo may
+        // flip that setting on import / apply, so both names are watched. The unused one just stays true.
+        private static List<string> SetupTalkGate(AnimatorController fx)
+        {
+            var notes = new List<string>();
+            var talk = fx.layers.FirstOrDefault(x => x.name == TalkLayerName);
+            if (talk == null || talk.stateMachine == null)
+            {
+                notes.Add($"\"{TalkLayerName}\" layer not found");
+                return notes;
+            }
+
+            var gateParams = new[] { CancelParamName, FaceEmoParamPrefix + CancelParamName };
+
+            var parameters = fx.parameters.ToList();
+            foreach (var name in gateParams.Where(x => parameters.All(y => y.name != x)))
+            {
+                // Defaults to true so that lip sync works even if FaceEmo is not applied
+                parameters.Add(new AnimatorControllerParameter { name = name, type = AnimatorControllerParameterType.Bool, defaultBool = true });
+            }
+            fx.parameters = parameters.ToArray();
+
+            var added = 0;
+            foreach (var child in talk.stateMachine.states)
+            {
+                var state = child.state;
+                foreach (var name in gateParams)
+                {
+                    if (state.transitions.Any(x => x.conditions.Any(y => y.parameter == name))) { continue; }
+
+                    var exit = state.AddExitTransition();
+                    exit.hasExitTime = false;
+                    exit.duration = 0;
+                    exit.AddCondition(AnimatorConditionMode.IfNot, 0, name);
+
+                    // Must be evaluated before the transitions to the talk pattern states
+                    var transitions = state.transitions.ToList();
+                    transitions.Remove(exit);
+                    transitions.Insert(0, exit);
+                    state.transitions = transitions.ToArray();
+                    EditorUtility.SetDirty(state);
+                    added++;
+                }
+            }
+
+            if (added > 0) { notes.Add($"\"{TalkLayerName}\" layer gated by {CancelParamName} ({added} transitions)"); }
+            return notes;
         }
 
         // Removes the lip sync blend shape curves from the selected expression clips.
