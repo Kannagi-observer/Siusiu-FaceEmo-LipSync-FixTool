@@ -1,2 +1,41 @@
-# Siusiu-FaceEmo-LipSync-FixTool
-ADPX様より発売されている、Siusiu( https://booth.pm/ja/items/8426340 )をFaceEmo( https://booth.pm/ja/items/4915091 )で表情改変する際に、LipSyncを正常に動作させるためのツールです。
+突貫工事で作ったツールです。販売もしないので、保守もアップデートもやる気が出ない限りはしないです。
+Siusiu専用です。他のアバターでは何もせずスキップします。
+
+・確認環境
+FaceEmo 1.7.0 / Modular Avatar 1.18.7 / VRCSDK 3.10.5
+Kisekae版のSiusiuで確認しています。
+
+・このツールがやること
+- FaceEmoの「除外シェイプキー」と「口変形キャンセル」にSiusiuのLipSync用シェイプキーを登録します
+- アバターのFXを Assets/Siusiu_FaceEmo に複製し、アバター側のFXを複製に差し替えます(元のFXは変更しません)
+- 複製したFXのFacialレイヤーを無効にします。ジェスチャーで出る付属の表情は出なくなります
+
+・導入方法
+1.UnityPackageをインポート
+2.SiusiuのPrefabをHierarchyに置き、FaceEmoを起動する
+3.Hierarchyに「FaceEmo」オブジェクトが生成されたことを確認する
+4.Tools→Siusiu→Setup FaceEmo LipSyncを選択する
+5.ダイアログが出るのでOKを押す
+6.FaceEmoで使いたいAnimation Clipを複製し、複製したほうをProjectウィンドウで選択して、
+  Tools→Siusiu→Strip LipSync Curves From Selected Clipsを選択する
+  (クリップを直接書き換えるので、元のファイルを残したい場合は必ず複製してください)
+7.ダイアログが出るのでOKを押す
+8.FaceEmoで表情を設定し、「アバターに適用」を押す
+  (Setupより前に適用済みの場合も、もう一度適用してください)
+9.そのままアップロード
+
+・注意
+- FaceEmoの表情ごとの「リップシンク無効」は使わないでください。喋ったときに口が二重になります
+- 喋っている間は表情の口の形が打ち消されます(元のSiusiuと同じ挙動です)
+- 耳と尻尾は元のジェスチャー割り当てのまま動きます
+
+・元に戻す方法
+アバターのVRC Avatar DescriptorのFXを、元のFXコントローラーに戻してください。
+
+・不具合報告について
+導入方法の通りにやっても動かなかったら報告ください。やる気があるときに修正します。
+ただし、口が開いている表情でLipSyncが崩れるのは仕様なので対応しません
+(その表情がSiusiuのLipSync用シェイプキーを口の形に使っているためです)。
+まばたきはこのツールでは触っていないので対象外です。
+
+ライセンスと仕組みはスクリプト内に書いてあります(MITライセンス)。
